@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="ghubmouse.vcxproj" Id="f943a4ad-089d-4309-a988-efab92740870" />
+</Solution>
