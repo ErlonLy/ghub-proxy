@@ -57,7 +57,7 @@ Simula a liberação do botão do mouse anteriormente pressionado.
 ## Requisitos de Compilação
 
 Para compilar este projeto, é necessário:
-- Microsoft Visual Studio (com suporte a C/C++).
+- Microsoft Visual Studio 2026 (com suporte a C/C++).
 - Windows SDK.
 
 O projeto utiliza um arquivo `.vcxproj` padrão que pode ser aberto diretamente no Visual Studio para compilação em arquiteturas x64.
