@@ -1,199 +1,164 @@
 # GHub Mouse DLL Wrapper
 
-Esta biblioteca (DLL) fornece uma interface simples para interagir diretamente com o driver de mouse virtual do **Logitech G Hub**. Ela permite simular movimentação relativa do mouse e cliques de botões a nível de driver kernel-mode, facilitando a automação de entrada sem ser detectada por sistemas de proteção convencionais que bloqueiam APIs de user-mode (como `SendInput` ou `mouse_event`).
+Interface para o driver de mouse virtual do Logitech G Hub e LGS. Comunicação direta em kernel-mode via IOCTL.
 
----
+## Requisitos
 
-## 📋 Pré-requisitos
+1. G Hub ou LGS rodando no sistema.
+2. Privilégios de Administrador no processo que carregar a DLL.
+3. Arquitetura x64.
 
-Para que a DLL funcione corretamente, os seguintes requisitos devem ser atendidos:
+## Funções Exportadas (__stdcall)
 
-1. **Logitech G Hub Instalado**: O software oficial do Logitech G Hub deve estar instalado e rodando no sistema, pois a DLL se comunica diretamente com o driver virtual instalado por ele.
-2. **Privilégios de Administrador**: O aplicativo que carrega esta DLL **precisa ser executado como Administrador**. Isso ocorre porque o acesso direto aos caminhos do dispositivo virtual no kernel (`\\??\\ROOT#SYSTEM...`) exige privilégios elevados.
-3. **Arquitetura Compatível**: A DLL deve ser compilada e carregada na mesma arquitetura do processo chamador (geralmente **x64**).
-
----
-
-## 🛠️ API Exportada (Convenção `__stdcall`)
-
-A DLL expõe as seguintes funções para uso externo:
-
-### 1. `mouse_open`
-Inicializa e abre a conexão com o driver do G Hub.
-```cpp
+### mouse_open
+Abre a comunicação com o driver. Faz a varredura automática dos caminhos de dispositivo.
+```c
 BOOL __stdcall mouse_open(void);
 ```
-- **Retorno**: `TRUE` se a conexão com o driver foi aberta com sucesso; `FALSE` caso contrário (geralmente por falta de privilégios ou se o G Hub não estiver instalado).
+Retorna `TRUE` em caso de sucesso.
 
-### 2. `mouse_close`
-Fecha a conexão ativa com o driver e libera o handle.
-```cpp
+### mouse_close
+Encerra a conexão e reseta todos os botões.
+```c
 void __stdcall mouse_close(void);
 ```
 
-### 3. `moveR`
-Move o cursor do mouse de forma relativa em relação à posição atual.
-```cpp
+### moveR
+Movimenta o cursor relativamente. Valores maiores que 127 são divididos em passos mantendo proporção linear nos eixos X e Y.
+```c
 NTSTATUS __stdcall moveR(int dx, int dy);
 ```
-- **Parâmetros**:
-  - `dx`: Distância horizontal (positivo para direita, negativo para esquerda).
-  - `dy`: Distância vertical (positivo para baixo, negativo para cima).
-- **Nota**: A DLL divide automaticamente movimentos grandes em passos menores (máximo de 127 por passo) para garantir a compatibilidade com o driver.
-- **Retorno**: `STATUS_SUCCESS` (`0`) em caso de sucesso.
 
-### 4. `press`
-Simula o pressionamento (pressionar e segurar) de um botão do mouse.
-```cpp
+### press / mouse_down
+Pressiona e segura o botão informado. Preserva outros botões que já estejam pressionados.
+```c
 NTSTATUS __stdcall press(BYTE button);
+NTSTATUS __stdcall mouse_down(BYTE button);
 ```
-- **Parâmetros**:
-  - `button`: Máscara binária do botão. Valores comuns:
-    - `1`: Botão Esquerdo
-    - `2`: Botão Direito
-    - `4`: Botão do Meio (Scroll)
-    - `8`: Botão Lateral Traseiro (Mouse 4)
-    - `16`: Botão Lateral Dianteiro (Mouse 5)
-- **Retorno**: `STATUS_SUCCESS` (`0`) em caso de sucesso.
 
-### 5. `release`
-Solta todos os botões do mouse que foram pressionados anteriormente.
-```cpp
+### release
+Solta todos os botões que estiverem ativos.
+```c
 NTSTATUS __stdcall release(void);
 ```
-- **Retorno**: `STATUS_SUCCESS` (`0`) em caso de sucesso.
 
----
+### release_button / mouse_up
+Solta exclusivamente o botão informado.
+```c
+NTSTATUS __stdcall release_button(BYTE button);
+NTSTATUS __stdcall mouse_up(BYTE button);
+```
 
-## 💻 Exemplos de Uso
+### mouse_click
+Executa clique completo com delay configurável em milissegundos.
+```c
+NTSTATUS __stdcall mouse_click(BYTE button, DWORD delay_ms);
+```
 
-Abaixo estão exemplos práticos de como usar a DLL em diferentes linguagens de programação.
+### scroll
+Movimenta o scroll vertical. Positivo sobe, negativo desce.
+```c
+NTSTATUS __stdcall scroll(char wheel);
+```
 
-### 1. Python (via `ctypes`)
-Python é ideal para scripts rápidos de automação. Salve o script no mesmo diretório da DLL ou forneça o caminho completo para a DLL compiled.
+## Códigos de Botão
+
+- `1`: Botão Esquerdo
+- `2`: Botão Direito
+- `4`: Botão do Meio
+- `8`: Mouse 4 (Lateral Traseiro)
+- `16`: Mouse 5 (Lateral Dianteiro)
+
+## Exemplos de Integração
+
+### Python (ctypes)
 
 ```python
 import ctypes
 import time
 
-# 1. Carregar a DLL (certifique-se de que a arquitetura do Python corresponda à da DLL)
-try:
-    ghub = ctypes.windll.LoadLibrary("ghubmouse.dll")
-except Exception as e:
-    print(f"Erro ao carregar DLL: {e}")
-    exit(1)
+ghub = ctypes.windll.LoadLibrary("ghubmouse.dll")
 
-# 2. Definir tipos de retorno e argumentos das funções exportadas
 ghub.mouse_open.restype = ctypes.c_bool
 ghub.mouse_open.argtypes = []
 
 ghub.mouse_close.restype = None
 ghub.mouse_close.argtypes = []
 
-ghub.moveR.restype = ctypes.c_long  # NTSTATUS
+ghub.moveR.restype = ctypes.c_long
 ghub.moveR.argtypes = [ctypes.c_int, ctypes.c_int]
 
-ghub.press.restype = ctypes.c_long  # NTSTATUS
+ghub.press.restype = ctypes.c_long
 ghub.press.argtypes = [ctypes.c_ubyte]
 
-ghub.release.restype = ctypes.c_long  # NTSTATUS
+ghub.release.restype = ctypes.c_long
 ghub.release.argtypes = []
 
-# Mapeamento de botões
-MOUSE_LEFT = 1
-MOUSE_RIGHT = 2
+ghub.mouse_click.restype = ctypes.c_long
+ghub.mouse_click.argtypes = [ctypes.c_ubyte, ctypes.c_ulong]
 
-def main():
-    print("Tentando conectar ao driver do Logitech G Hub...")
-    # O script DEVE ser executado como Administrador
-    if not ghub.mouse_open():
-        print("Erro: Não foi possível abrir o dispositivo do G Hub.")
-        print("Verifique se o G Hub está instalado e se você executou o console como Administrador.")
-        return
+ghub.scroll.restype = ctypes.c_long
+ghub.scroll.argtypes = [ctypes.c_byte]
 
-    print("Conexão estabelecida com sucesso!")
-    
-    try:
-        # Exemplo 1: Mover o mouse de forma relativa (+50 px direita, +50 px baixo)
-        print("Movendo o mouse...")
-        ghub.moveR(50, 50)
-        time.sleep(0.5)
+if not ghub.mouse_open():
+    print("Falha ao abrir driver. Execute como Administrador.")
+    exit(1)
 
-        # Exemplo 2: Clique no botão esquerdo (Press + Release)
-        print("Pressionando botão esquerdo...")
-        ghub.press(MOUSE_LEFT)
-        time.sleep(0.1)
-        
-        print("Soltando botão...")
-        ghub.release()
-        time.sleep(0.5)
-        
-    finally:
-        # Sempre feche a conexão ao finalizar
-        print("Fechando conexão...")
-        ghub.mouse_close()
+# Movimento diagonal proporcional
+ghub.moveR(200, 100)
+time.sleep(0.05)
 
-if __name__ == "__main__":
-    main()
+# Clique esquerdo com delay de 20ms
+ghub.mouse_click(1, 20)
+
+# Scroll para baixo
+ghub.scroll(-3)
+
+ghub.mouse_close()
 ```
 
-### 2. C++ (Carregamento Dinâmico)
-Ideal para projetos nativos ou cheats que injetam ou rodam em paralelo.
+### C++
 
 ```cpp
 #include <windows.h>
 #include <iostream>
 
-// Definição dos tipos dos ponteiros de função
-typedef BOOL(__stdcall* pfnMouseOpen)(void);
-typedef void(__stdcall* pfnMouseClose)(void);
-typedef NTSTATUS(__stdcall* pfnMoveR)(int, int);
-typedef NTSTATUS(__stdcall* pfnPress)(BYTE);
-typedef NTSTATUS(__stdcall* pfnRelease)(void);
+typedef BOOL(__stdcall* pfn_mouse_open)(void);
+typedef void(__stdcall* pfn_mouse_close)(void);
+typedef NTSTATUS(__stdcall* pfn_moveR)(int, int);
+typedef NTSTATUS(__stdcall* pfn_mouse_click)(BYTE, DWORD);
+typedef NTSTATUS(__stdcall* pfn_scroll)(char);
 
 int main() {
-    HMODULE hDll = LoadLibraryA("ghubmouse.dll");
-    if (!hDll) {
-        std::cerr << "Falha ao carregar ghubmouse.dll" << std::endl;
+    HMODULE dll = LoadLibraryA("ghubmouse.dll");
+    if (!dll) {
+        std::cerr << "Erro ao carregar ghubmouse.dll\n";
         return 1;
     }
 
-    auto mouse_open = (pfnMouseOpen)GetProcAddress(hDll, "mouse_open");
-    auto mouse_close = (pfnMouseClose)GetProcAddress(hDll, "mouse_close");
-    auto moveR = (pfnMoveR)GetProcAddress(hDll, "moveR");
-    auto press = (pfnPress)GetProcAddress(hDll, "press");
-    auto release = (pfnRelease)GetProcAddress(hDll, "release");
+    auto mouse_open  = (pfn_mouse_open)GetProcAddress(dll, "mouse_open");
+    auto mouse_close = (pfn_mouse_close)GetProcAddress(dll, "mouse_close");
+    auto moveR       = (pfn_moveR)GetProcAddress(dll, "moveR");
+    auto mouse_click = (pfn_mouse_click)GetProcAddress(dll, "mouse_click");
+    auto scroll      = (pfn_scroll)GetProcAddress(dll, "scroll");
 
-    if (!mouse_open || !mouse_close || !moveR || !press || !release) {
-        std::cerr << "Falha ao obter endereços das funções exportadas" << std::endl;
-        FreeLibrary(hDll);
+    if (!mouse_open()) {
+        std::cerr << "Falha ao abrir dispositivo. Execute como Administrador.\n";
+        FreeLibrary(dll);
         return 1;
     }
 
-    if (mouse_open()) {
-        std::cout << "Conectado ao driver do G Hub!" << std::endl;
+    moveR(150, 75);
+    mouse_click(1, 30);
+    scroll(-2);
 
-        // Move 100 pixels para a direita
-        moveR(100, 0);
-        Sleep(100);
-
-        // Clica com o botão direito (código 2)
-        press(2); 
-        Sleep(50);
-        release();
-
-        mouse_close();
-    } else {
-        std::cerr << "Falha ao abrir driver do mouse. Execute como administrador!" << std::endl;
-    }
-
-    FreeLibrary(hDll);
+    mouse_close();
+    FreeLibrary(dll);
     return 0;
 }
 ```
 
-### 3. C# (P/Invoke)
-Útil para interfaces em WinForms, WPF ou Unity.
+### C#
 
 ```csharp
 using System;
@@ -202,7 +167,6 @@ using System.Threading;
 
 class Program
 {
-    // Importações da DLL
     [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
     public static extern bool mouse_open();
 
@@ -213,47 +177,24 @@ class Program
     public static extern int moveR(int dx, int dy);
 
     [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
-    public static extern int press(byte button);
+    public static extern int mouse_click(byte button, uint delay_ms);
 
     [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
-    public static extern int release();
+    public static extern int scroll(sbyte wheel);
 
     static void Main()
     {
-        Console.WriteLine("Abrindo driver do mouse...");
         if (!mouse_open())
         {
-            Console.WriteLine("Erro ao conectar. O programa está executando como Administrador?");
+            Console.WriteLine("Erro ao abrir driver. Execute como Administrador.");
             return;
         }
 
-        try
-        {
-            // Move relativamente
-            moveR(-50, -50);
-            Thread.Sleep(200);
+        moveR(120, 60);
+        mouse_click(1, 25);
+        scroll(-1);
 
-            // Botão esquerdo (1)
-            press(1);
-            Thread.Sleep(50);
-            release();
-        }
-        finally
-        {
-            mouse_close();
-            Console.WriteLine("Conexão com o driver encerrada.");
-        }
+        mouse_close();
     }
 }
 ```
-
----
-
-## 🛠️ Como Compilar
-
-Este projeto usa uma solução do Visual Studio (`ghubmouse.slnx` / `ghubmouse.vcxproj`).
-
-1. Abra o arquivo de solução no **Visual Studio 2022** ou superior.
-2. Defina a configuração de compilação como **Release** e a plataforma como **x64**.
-3. Compile a solução (Build -> Build Solution).
-4. O arquivo `ghubmouse.dll` resultante será gerado na pasta de saída (`x64/Release/`).

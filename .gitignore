@@ -53,3 +53,11 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Visual Studio build output
+ghubmouse/
+x64/
+.vs/
+*.iobj
+*.ipdb
+
