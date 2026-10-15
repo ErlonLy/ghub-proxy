@@ -41,8 +41,78 @@ Através da desmontagem e análise do driver de kernel `logi_joy_bus_enum.x64.sy
 
 ---
 
-## ⚡ Exemplo Rápido (Python)
+## 📚 Tutoriais de Implementação e Uso
 
+Documentação completa passo a passo, wrappers prontos e exemplos práticos para sua linguagem:
+
+| Linguagem | Documentação e Guia Completo | Método de Importação |
+| :--- | :--- | :--- |
+| **C# (.NET)** | 👉 [**Guia de Uso em C# (.NET)**](docs/csharp.md) | `[DllImport("ghubmouse.dll")]` (P/Invoke x64) |
+| **C / C++** | 👉 [**Guia de Uso em C / C++**](docs/cpp.md) | `LoadLibraryA` ou `exports.h` + `.lib` |
+| **Python** | 👉 [**Guia de Uso em Python**](docs/python.md) | `ctypes.windll.LoadLibrary` (Python 64-bit) |
+
+---
+
+## ⚡ Como Importar e Usar nas 3 Linguagens
+
+### 🔹 C# (.NET)
+```csharp
+using System;
+using System.Runtime.InteropServices;
+
+class Program {
+    [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern bool mouse_open();
+
+    [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern void mouse_close();
+
+    [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern int moveR(int dx, int dy);
+
+    [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern int mouse_click(ushort button, uint delayMs);
+
+    static void Main() {
+        if (!mouse_open()) return;
+        moveR(100, 50);          // Move relativamente
+        mouse_click(1, 25);      // Clique esquerdo (1) com 25ms delay
+        mouse_close();
+    }
+}
+```
+> Veja o [Guia Completo de C# com Wrapper IDisposable](docs/csharp.md).
+
+### 🔹 C / C++
+```cpp
+#include <windows.h>
+
+typedef BOOL(__stdcall* pfn_mouse_open)(void);
+typedef void(__stdcall* pfn_mouse_close)(void);
+typedef NTSTATUS(__stdcall* pfn_moveR)(int, int);
+typedef NTSTATUS(__stdcall* pfn_mouse_click)(WORD, DWORD);
+
+int main() {
+    HMODULE dll = LoadLibraryA("ghubmouse.dll");
+    if (!dll) return 1;
+
+    auto mouse_open  = (pfn_mouse_open)GetProcAddress(dll, "mouse_open");
+    auto mouse_close = (pfn_mouse_close)GetProcAddress(dll, "mouse_close");
+    auto moveR       = (pfn_moveR)GetProcAddress(dll, "moveR");
+    auto mouse_click = (pfn_mouse_click)GetProcAddress(dll, "mouse_click");
+
+    if (mouse_open()) {
+        moveR(100, 50);      // Move relativamente
+        mouse_click(1, 25);  // Clique esquerdo (1) com 25ms delay
+        mouse_close();
+    }
+    FreeLibrary(dll);
+    return 0;
+}
+```
+> Veja o [Guia Completo de C++ com Classe RAII](docs/cpp.md).
+
+### 🔹 Python
 ```python
 import ctypes
 import time
@@ -50,29 +120,16 @@ import time
 ghub = ctypes.windll.LoadLibrary("ghubmouse.dll")
 
 ghub.mouse_open.restype = ctypes.c_bool
-ghub.mouse_open.argtypes = []
 ghub.mouse_close.restype = None
-ghub.mouse_close.argtypes = []
-ghub.moveR.restype = ctypes.c_long
 ghub.moveR.argtypes = [ctypes.c_int, ctypes.c_int]
-ghub.mouse_click.restype = ctypes.c_long
 ghub.mouse_click.argtypes = [ctypes.c_ushort, ctypes.c_ulong]
 
-if not ghub.mouse_open():
-    print("Falha ao abrir driver G HUB.")
-    exit(1)
-
-# Move relativamente (dx=100, dy=50)
-ghub.moveR(100, 50)
-time.sleep(0.05)
-
-# Clique esquerdo com delay de 25ms
-ghub.mouse_click(1, 25)
-
-ghub.mouse_close()
+if ghub.mouse_open():
+    ghub.moveR(100, 50)      # Move relativamente
+    ghub.mouse_click(1, 25)  # Clique esquerdo (1) com 25ms delay
+    ghub.mouse_close()
 ```
-
-Veja também o arquivo [`example.py`](example.py) e a documentação completa em [`doc.md`](doc.md).
+> Veja o [Guia Completo de Python com Context Manager](docs/python.md) e o script [`example.py`](example.py).
 
 ---
 

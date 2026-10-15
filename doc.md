@@ -129,3 +129,41 @@ int main() {
     return 0;
 }
 ```
+
+### C# (.NET)
+
+```csharp
+using System;
+using System.Runtime.InteropServices;
+
+class Program {
+    [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern bool mouse_open();
+
+    [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern void mouse_close();
+
+    [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern int moveR(int dx, int dy);
+
+    [DllImport("ghubmouse.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern int mouse_click(ushort button, uint delayMs);
+
+    static void Main() {
+        if (!mouse_open()) return;
+        moveR(150, 75);
+        mouse_click(1, 30);
+        mouse_close();
+    }
+}
+```
+
+---
+
+## 📚 Tutoriais e Documentação Dedicada
+
+Para guias aprofundados, classes wrappers completas, tratamento de erros e boas práticas:
+- [Guia Completo de Implementação em C# (.NET)](docs/csharp.md)
+- [Guia Completo de Implementação em C / C++](docs/cpp.md)
+- [Guia Completo de Implementação em Python](docs/python.md)
+
