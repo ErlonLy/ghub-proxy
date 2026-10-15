@@ -3,10 +3,9 @@
 #include "device.h"
 #include <stdlib.h>
 
-NTSTATUS Move_SendMoveCommand(char dx, char dy)
+NTSTATUS Move_SendMoveCommand(short dx, short dy)
 {
-    NTSTATUS status;
-    status = Ioctl_SendMove(dx, dy);
+    NTSTATUS status = Ioctl_SendMove(dx, dy);
     if (status != 0) {
         Device_Close();
         if (Device_Open()) {
@@ -27,7 +26,7 @@ NTSTATUS Move_MoveMouse(int dx, int dy)
     int max_dist = (abs_x > abs_y) ? abs_x : abs_y;
 
     if (max_dist <= MAX_MOVE_STEP) {
-        return Move_SendMoveCommand((char)dx, (char)dy);
+        return Move_SendMoveCommand((short)dx, (short)dy);
     }
 
     int steps = (max_dist + MAX_MOVE_STEP - 1) / MAX_MOVE_STEP;
@@ -40,7 +39,7 @@ NTSTATUS Move_MoveMouse(int dx, int dy)
         int step_dx = target_x - curr_x;
         int step_dy = target_y - curr_y;
 
-        NTSTATUS status = Move_SendMoveCommand((char)step_dx, (char)step_dy);
+        NTSTATUS status = Move_SendMoveCommand((short)step_dx, (short)step_dy);
         if (status != 0) {
             return status;
         }
@@ -50,4 +49,27 @@ NTSTATUS Move_MoveMouse(int dx, int dy)
     }
 
     return 0;
+}
+
+NTSTATUS Move_MoveMouseAbsolute(int target_x, int target_y)
+{
+    POINT pt;
+    if (!GetCursorPos(&pt)) {
+        // If desktop is inaccessible (e.g. non-interactive service/thread), attach to winsta0\default
+        HWINSTA hwinsta = OpenWindowStationW(L"winsta0", FALSE, MAXIMUM_ALLOWED);
+        if (hwinsta) {
+            SetProcessWindowStation(hwinsta);
+            HDESK hdesk = OpenDesktopW(L"default", 0, FALSE, MAXIMUM_ALLOWED);
+            if (hdesk) {
+                SetThreadDesktop(hdesk);
+            }
+        }
+        if (!GetCursorPos(&pt)) {
+            return (NTSTATUS)0xC0000001L; // STATUS_UNSUCCESSFUL
+        }
+    }
+
+    int dx = target_x - pt.x;
+    int dy = target_y - pt.y;
+    return Move_MoveMouse(dx, dy);
 }

@@ -5,15 +5,17 @@
 static const DWORD __lyrien_marker = 0x4C595249;
 static const BYTE __signature[] = { 'L','y','r','i','e','n','-','d','l','l',0 };
 
-static volatile BYTE g_CurrentButtons = 0;
+static volatile WORD g_CurrentButtons = 0;
 
 NTSTATUS Ioctl_SendCommand(MOUSE_COMMAND* pCommand)
 {
     IO_STATUS_BLOCK iosb;
     
-    if (!g_hDevice) return STATUS_INVALID_HANDLE;
+    if (!Device_IsOpen() && !Device_Open()) {
+        return (NTSTATUS)0xC0000008L; // STATUS_INVALID_HANDLE
+    }
     
-    return NtDeviceIoControlFile(
+    NTSTATUS status = NtDeviceIoControlFile(
         g_hDevice,
         NULL,
         NULL,
@@ -21,26 +23,45 @@ NTSTATUS Ioctl_SendCommand(MOUSE_COMMAND* pCommand)
         &iosb,
         IOCTL_MOUSE_COMMAND,
         pCommand,
-        INPUT_BUFFER_SIZE,
+        (ULONG)sizeof(MOUSE_COMMAND),
         NULL,
         0
     );
+
+    // Auto-reconnect on invalid handle
+    if (status == (NTSTATUS)0xC0000008L || status == (NTSTATUS)0xC0000034L) {
+        Device_Close();
+        if (Device_Open()) {
+            status = NtDeviceIoControlFile(
+                g_hDevice,
+                NULL,
+                NULL,
+                NULL,
+                &iosb,
+                IOCTL_MOUSE_COMMAND,
+                pCommand,
+                (ULONG)sizeof(MOUSE_COMMAND),
+                NULL,
+                0
+            );
+        }
+    }
+    
+    return status;
 }
 
-NTSTATUS Ioctl_SendMove(char dx, char dy)
+NTSTATUS Ioctl_SendMove(short dx, short dy)
 {
     MOUSE_COMMAND cmd;
-    
     cmd.button = g_CurrentButtons;
     cmd.dx = dx;
     cmd.dy = dy;
     cmd.wheel = 0;
     cmd.pan = 0;
-    
     return Ioctl_SendCommand(&cmd);
 }
 
-NTSTATUS Ioctl_SendButton(BYTE button, BYTE isDown)
+NTSTATUS Ioctl_SendButton(WORD button, BYTE isDown)
 {
     MOUSE_COMMAND cmd;
     
@@ -66,17 +87,26 @@ NTSTATUS Ioctl_SendButton(BYTE button, BYTE isDown)
 NTSTATUS Ioctl_SendWheel(char wheel)
 {
     MOUSE_COMMAND cmd;
-    
     cmd.button = g_CurrentButtons;
     cmd.dx = 0;
     cmd.dy = 0;
     cmd.wheel = wheel;
     cmd.pan = 0;
-    
     return Ioctl_SendCommand(&cmd);
 }
 
-BYTE Ioctl_GetButtons(void)
+NTSTATUS Ioctl_SendPan(char pan)
+{
+    MOUSE_COMMAND cmd;
+    cmd.button = g_CurrentButtons;
+    cmd.dx = 0;
+    cmd.dy = 0;
+    cmd.wheel = 0;
+    cmd.pan = pan;
+    return Ioctl_SendCommand(&cmd);
+}
+
+WORD Ioctl_GetButtons(void)
 {
     return g_CurrentButtons;
 }

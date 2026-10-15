@@ -58,6 +58,12 @@ dkms.conf
 ghubmouse/
 x64/
 .vs/
+.vscode/
 *.iobj
 *.ipdb
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 
